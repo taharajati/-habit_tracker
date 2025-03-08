@@ -9,7 +9,9 @@ router.get('/', async (req, res) => {
       db.all(
         `SELECT h.*, 
           (SELECT COUNT(*) FROM habit_progress 
-           WHERE habit_id = h.id AND user_id = h.user_id AND completed = 1) as completion_count,
+           WHERE habit_id = h.id AND user_id = h.user_id AND completed = 1) as total_completion,
+          (SELECT COUNT(*) FROM habit_progress 
+           WHERE habit_id = h.id AND user_id = h.user_id) as total_days,
           (SELECT completed FROM habit_progress 
            WHERE habit_id = h.id AND user_id = h.user_id AND date = date('now', 'localtime')
            LIMIT 1) as today_status
@@ -190,8 +192,8 @@ router.patch('/:id/complete', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(
-        'INSERT OR REPLACE INTO habit_progress (habit_id, completed, date) VALUES (?, ?, ?)',
-        [id, completed ? 1 : 0, today],
+        'INSERT OR REPLACE INTO habit_progress (habit_id, user_id, completed, date) VALUES (?, ?, ?, ?)',
+        [id, req.user.id, completed ? 1 : 0, today],
         (err) => {
           if (err) reject(err);
           resolve();

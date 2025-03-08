@@ -118,7 +118,7 @@ export default function Dashboard() {
           <div className="text-4xl mb-4">📊</div>
           <div className="text-2xl font-bold">
             {Math.round(
-              (stats.habits.filter(h => h.completed).length / stats.habits.length) * 100
+              (stats.habits.filter(h => h.today_status === 1).length / stats.habits.length) * 100
             )}%
           </div>
           <div className="text-text-secondary">تکمیل امروز</div>
@@ -138,18 +138,18 @@ export default function Dashboard() {
                     <p className="text-sm text-text-secondary">{habit.description}</p>
                   </div>
                   <div className={`px-2 py-1 rounded text-sm ${
-                    habit.completed 
+                    habit.today_status === 1
                       ? 'bg-green-100 text-green-700'
                       : 'bg-gray-100 text-gray-700'
                   }`}>
-                    {habit.completed ? 'انجام شده' : 'در انتظار'}
+                    {habit.today_status === 1 ? 'انجام شده' : 'در انتظار'}
                   </div>
                 </div>
                 <div className="progress-bar">
                   <div
                     className="progress-bar-fill"
                     style={{ 
-                      width: `${(habit.totalCompletion / habit.totalDays) * 100}%`
+                      width: `${habit.total_days > 0 ? (habit.total_completion / habit.total_days) * 100 : 0}%`
                     }}
                   />
                 </div>

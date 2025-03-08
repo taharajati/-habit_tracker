@@ -194,12 +194,12 @@ export default function Habits() {
                 <div className="progress-bar">
                   <div
                     className="progress-bar-fill"
-                    style={{ width: `${habit.totalDays > 0 ? (habit.totalCompletion / habit.totalDays) * 100 : 0}%` }}
+                    style={{ width: `${habit.total_days > 0 ? (habit.total_completion / habit.total_days) * 100 : 0}%` }}
                   ></div>
                 </div>
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>رکورد فعلی: {habit.currentStreak} روز</span>
-                  <span>تکمیل: {habit.totalDays > 0 ? Math.round((habit.totalCompletion / habit.totalDays) * 100) : 0}%</span>
+                  <span>تکمیل: {habit.total_days > 0 ? Math.round((habit.total_completion / habit.total_days) * 100) : 0}%</span>
                 </div>
               </div>
             </div>

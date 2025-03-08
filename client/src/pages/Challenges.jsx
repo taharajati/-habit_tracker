@@ -149,6 +149,7 @@ export default function Challenges() {
               <input
                 type="text"
                 required
+                name="name"
                 className="input"
                 value={formData.name}
                 onChange={handleChange}
@@ -161,6 +162,7 @@ export default function Challenges() {
                 توضیحات
               </label>
               <textarea
+                name="description"
                 className="input min-h-[100px]"
                 value={formData.description}
                 onChange={handleChange}
@@ -176,6 +178,7 @@ export default function Challenges() {
                 <input
                   type="date"
                   required
+                  name="startDate"
                   className="input"
                   value={formData.startDate}
                   onChange={handleChange}
@@ -189,6 +192,7 @@ export default function Challenges() {
                 <input
                   type="date"
                   required
+                  name="endDate"
                   className="input"
                   value={formData.endDate}
                   onChange={handleChange}
@@ -203,6 +207,7 @@ export default function Challenges() {
               <input
                 type="text"
                 required
+                name="target"
                 className="input"
                 value={formData.target}
                 onChange={handleChange}

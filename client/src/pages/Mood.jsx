@@ -84,7 +84,7 @@ export default function Mood() {
     datasets: [
       {
         label: 'سطح حال و احوال',
-        data: moods.map(m => m.level),
+        data: moods.map(m => m.mood_value),
         borderColor: 'rgb(236, 72, 153)',
         backgroundColor: 'rgba(236, 72, 153, 0.1)',
         tension: 0.4,
@@ -245,12 +245,15 @@ export default function Mood() {
               {moods.map((mood) => (
                 <div key={mood.id} className="card p-4 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-3xl">{moodEmojis[mood.level]}</span>
+                    <span className="text-3xl">{moodEmojis[mood.mood_value]}</span>
                     <span className="text-sm text-gray-500">{mood.date}</span>
                   </div>
-                  {mood.note && (
-                    <p className="text-sm text-gray-600 mt-2">{mood.note}</p>
+                  {mood.notes && (
+                    <p className="text-sm text-gray-600">{mood.notes}</p>
                   )}
+                  <div className="text-sm text-gray-500">
+                    {moodLabels[mood.mood_value]}
+                  </div>
                 </div>
               ))}
             </div>
