@@ -90,19 +90,24 @@ const initDb = () => {
     const createHabitProgressTable = () => {
       // Create habit_progress table
       db.run(`
-        CREATE TABLE IF NOT EXISTS habit_progress (
+        CREATE TABLE IF NOT EXISTS habitProgress (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL,
-          habit_id INTEGER NOT NULL,
-          completed BOOLEAN DEFAULT 0,
-          date DATE NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (habit_id) REFERENCES habits (id),
-          FOREIGN KEY (user_id) REFERENCES users (id)
+          userId INTEGER NOT NULL,
+          habitId INTEGER NOT NULL,
+          completed INTEGER DEFAULT 0,
+          progressDate TEXT NOT NULL,
+          timeSpent INTEGER,
+          mood TEXT,
+          notes TEXT,
+          rewardGiven INTEGER DEFAULT 0,
+          streak INTEGER DEFAULT 0,
+          streakBroken INTEGER DEFAULT 0,
+          FOREIGN KEY (habitId) REFERENCES habits (id),
+          FOREIGN KEY (userId) REFERENCES users (id)
         )
       `, (err) => {
         if (err) {
-          console.error('Error creating habit_progress table:', err);
+          console.error('Error creating habitProgress table:', err);
         } else {
           console.log('Habit progress table created successfully');
         }

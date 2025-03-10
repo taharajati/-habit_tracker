@@ -45,12 +45,12 @@ export const authService = {
 
 // Habits services
 export const habitService = {
-  getHabits: () => api.get('/habits'),
+  getHabits: (date) => api.get('/habits', { params: { date } }),
   createHabit: (data) => api.post('/habits', data),
   updateHabit: (id, data) => api.put(`/habits/${id}`, data),
   deleteHabit: (id) => api.delete(`/habits/${id}`),
-  toggleHabitComplete: (id, completed) =>
-    api.patch(`/habits/${id}/complete`, { completed }),
+  toggleHabitComplete: (id, completed, date) =>
+    api.patch(`/habits/${id}/complete`, { completed, date }),
 };
 
 // Progress services

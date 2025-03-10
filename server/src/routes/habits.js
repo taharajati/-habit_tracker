@@ -5,20 +5,37 @@ const db = require('../config/database');
 // Get all habits for the current user
 router.get('/', async (req, res) => {
   try {
+    const { date } = req.query;
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
     const habits = await new Promise((resolve, reject) => {
       db.all(
         `SELECT h.*, 
-          (SELECT COUNT(*) FROM habit_progress 
-           WHERE habit_id = h.id AND user_id = h.user_id AND completed = 1) as total_completion,
-          (SELECT COUNT(*) FROM habit_progress 
-           WHERE habit_id = h.id AND user_id = h.user_id) as total_days,
-          (SELECT completed FROM habit_progress 
-           WHERE habit_id = h.id AND user_id = h.user_id AND date = date('now', 'localtime')
-           LIMIT 1) as today_status
+          (SELECT COUNT(*) FROM habitProgress 
+           WHERE habitId = h.id AND userId = h.user_id AND completed = 1) as total_completion,
+          (SELECT COUNT(*) FROM habitProgress 
+           WHERE habitId = h.id AND userId = h.user_id) as total_days,
+          (SELECT completed FROM habitProgress 
+           WHERE habitId = h.id AND userId = h.user_id AND progressDate = ?
+           LIMIT 1) as today_status,
+          (SELECT GROUP_CONCAT(progressDate || ':' || completed) 
+           FROM habitProgress 
+           WHERE habitId = h.id AND userId = h.user_id 
+           AND progressDate >= date(?, '-30 days')
+           ORDER BY progressDate DESC) as recent_progress,
+          (SELECT COUNT(*) FROM (
+            SELECT progressDate, completed,
+                   ROW_NUMBER() OVER (ORDER BY progressDate DESC) as rn,
+                   ROW_NUMBER() OVER (ORDER BY progressDate DESC) - 
+                   ROW_NUMBER() OVER (PARTITION BY completed ORDER BY progressDate DESC) as grp
+            FROM habitProgress
+            WHERE habitId = h.id AND userId = h.user_id
+            ORDER BY progressDate DESC
+          ) WHERE completed = 1 AND grp = 1) as current_streak
         FROM habits h 
         WHERE h.user_id = ?
         ORDER BY h.created_at DESC`,
-        [req.user.id],
+        [targetDate, targetDate, req.user.id],
         (err, rows) => {
           if (err) reject(err);
           resolve(rows);
@@ -26,7 +43,45 @@ router.get('/', async (req, res) => {
       );
     });
 
-    res.json(habits);
+    // Process the habits to format recent progress
+    const processedHabits = habits.map(habit => {
+      let recentProgress = {};
+      if (habit.recent_progress) {
+        habit.recent_progress.split(',').forEach(progress => {
+          const [date, completed] = progress.split(':');
+          recentProgress[date] = completed === '1';
+        });
+      }
+
+      // Calculate completion rate based on frequency
+      let completionRate = 0;
+      const today = new Date(targetDate);
+      const startDate = new Date(habit.startDate);
+      const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+
+      switch (habit.frequency) {
+        case 'daily':
+          completionRate = (habit.total_completion / daysSinceStart) * 100;
+          break;
+        case 'weekly':
+          const weeksSinceStart = Math.ceil(daysSinceStart / 7);
+          completionRate = (habit.total_completion / weeksSinceStart) * 100;
+          break;
+        case 'monthly':
+          const monthsSinceStart = Math.ceil(daysSinceStart / 30);
+          completionRate = (habit.total_completion / monthsSinceStart) * 100;
+          break;
+      }
+
+      return {
+        ...habit,
+        recentProgress,
+        completionRate: Math.min(Math.round(completionRate), 100),
+        currentStreak: habit.current_streak || 0
+      };
+    });
+
+    res.json(processedHabits);
   } catch (err) {
     console.error('Get habits error:', err);
     res.status(500).json({ message: 'خطا در دریافت عادت‌ها' });
@@ -141,7 +196,7 @@ router.delete('/:id', async (req, res) => {
 
     // Delete habit progress first
     await new Promise((resolve, reject) => {
-      db.run('DELETE FROM habit_progress WHERE habit_id = ?', [id], (err) => {
+      db.run('DELETE FROM habitProgress WHERE habitId = ?', [id], (err) => {
         if (err) reject(err);
         resolve();
       });
@@ -166,7 +221,7 @@ router.delete('/:id', async (req, res) => {
 router.patch('/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
-    const { completed } = req.body;
+    const { completed, date } = req.body;
 
     if (typeof completed !== 'boolean') {
       return res.status(400).json({ message: 'وضعیت تکمیل نامعتبر است' });
@@ -188,12 +243,40 @@ router.patch('/:id/complete', async (req, res) => {
       return res.status(404).json({ message: 'عادت مورد نظر یافت نشد' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    // Check if the habit should be completed on this date based on frequency
+    const today = new Date(targetDate);
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const dayOfMonth = today.getDate();
+
+    let shouldComplete = false;
+    switch (habit.frequency) {
+      case 'daily':
+        shouldComplete = true;
+        break;
+      case 'weekly':
+        // For weekly habits, only allow completion on the same day of the week as the start date
+        const startDate = new Date(habit.startDate);
+        shouldComplete = startDate.getDay() === dayOfWeek;
+        break;
+      case 'monthly':
+        // For monthly habits, only allow completion on the same day of the month as the start date
+        const startDay = new Date(habit.startDate).getDate();
+        shouldComplete = startDay === dayOfMonth;
+        break;
+    }
+
+    if (!shouldComplete) {
+      return res.status(400).json({ 
+        message: `این عادت ${habit.frequency === 'weekly' ? 'هفتگی' : 'ماهانه'} است و فقط در روزهای مشخص شده قابل انجام است.` 
+      });
+    }
 
     await new Promise((resolve, reject) => {
       db.run(
-        'INSERT OR REPLACE INTO habit_progress (habit_id, user_id, completed, date) VALUES (?, ?, ?, ?)',
-        [id, req.user.id, completed ? 1 : 0, today],
+        'INSERT OR REPLACE INTO habitProgress (habitId, userId, completed, progressDate) VALUES (?, ?, ?, ?)',
+        [id, req.user.id, completed ? 1 : 0, targetDate],
         (err) => {
           if (err) reject(err);
           resolve();
@@ -247,10 +330,10 @@ router.get('/:id/stats', async (req, res) => {
 
     const stats = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT date, completed
-         FROM habit_progress
-         WHERE habit_id = ? AND date >= ${dateFilter}
-         ORDER BY date ASC`,
+        `SELECT progressDate as date, completed
+         FROM habitProgress
+         WHERE habitId = ? AND progressDate >= ${dateFilter}
+         ORDER BY progressDate ASC`,
         [id],
         (err, rows) => {
           if (err) reject(err);
