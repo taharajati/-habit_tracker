@@ -78,10 +78,10 @@ router.get('/summary', auth, (req, res) => {
   );
 });
 
-// Get progress for all habits
-router.get('/', async (req, res) => {
+// Get progress data for the progress page
+router.get('/', auth, async (req, res) => {
   try {
-    const { timeRange } = req.query; // 'week', 'month', 'year'
+    const { timeRange } = req.query; // 'week' or 'month'
     let dateFilter;
     
     switch (timeRange) {
@@ -89,28 +89,54 @@ router.get('/', async (req, res) => {
         dateFilter = "date('now', '-7 days')";
         break;
       case 'month':
-        dateFilter = "date('now', '-1 month')";
-        break;
-      case 'year':
-        dateFilter = "date('now', '-1 year')";
+        dateFilter = "date('now', '-30 days')";
         break;
       default:
-        dateFilter = "date('now', '-30 days')"; // default to last 30 days
+        dateFilter = "date('now', '-7 days')"; // default to week
     }
 
-    const progress = await new Promise((resolve, reject) => {
+    // Get daily completion data for chart
+    const dailyProgress = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT 
+          date(hp.progressDate) as date,
+          COUNT(DISTINCT h.id) as total_habits,
+          SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) as completed_habits
+         FROM habits h
+         LEFT JOIN habitProgress hp ON h.id = hp.habitId
+         WHERE h.user_id = ? AND hp.progressDate >= ${dateFilter}
+         GROUP BY date(hp.progressDate)
+         ORDER BY date(hp.progressDate) ASC`,
+        [req.user.id],
+        (err, rows) => {
+          if (err) reject(err);
+          resolve(rows);
+        }
+      );
+    });
+
+    // Get individual habit progress
+    const habits = await new Promise((resolve, reject) => {
       db.all(
         `SELECT 
           h.id as habit_id,
           h.name as habit_name,
           h.frequency,
-          COUNT(DISTINCT hp.date) as total_days,
+          COUNT(DISTINCT hp.progressDate) as total_days,
           SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) as completed_days,
-          ROUND(CAST(SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
-                CAST(COUNT(DISTINCT hp.date) AS FLOAT) * 100, 2) as completion_rate
+          ROUND(
+            CAST(SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
+            CAST(
+              CASE h.frequency
+                WHEN 'daily' THEN julianday('now') - julianday(h.created_at)
+                WHEN 'weekly' THEN (julianday('now') - julianday(h.created_at)) / 7
+                WHEN 'monthly' THEN (julianday('now') - julianday(h.created_at)) / 30
+              END
+            AS FLOAT) * 100, 
+          2) as completion_rate
          FROM habits h
-         LEFT JOIN habit_progress hp ON h.id = hp.habit_id 
-         WHERE h.user_id = ? AND hp.date >= ${dateFilter}
+         LEFT JOIN habitProgress hp ON h.id = hp.habitId 
+         WHERE h.user_id = ? AND hp.progressDate >= ${dateFilter}
          GROUP BY h.id
          ORDER BY completion_rate DESC`,
         [req.user.id],
@@ -121,28 +147,8 @@ router.get('/', async (req, res) => {
       );
     });
 
-    // Get daily completion data for chart
-    const dailyProgress = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT 
-          hp.date,
-          COUNT(DISTINCT h.id) as total_habits,
-          SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) as completed_habits
-         FROM habits h
-         LEFT JOIN habit_progress hp ON h.id = hp.habit_id
-         WHERE h.user_id = ? AND hp.date >= ${dateFilter}
-         GROUP BY hp.date
-         ORDER BY hp.date ASC`,
-        [req.user.id],
-        (err, rows) => {
-          if (err) reject(err);
-          resolve(rows);
-        }
-      );
-    });
-
     res.json({
-      habits: progress,
+      habits,
       daily: dailyProgress
     });
   } catch (err) {
