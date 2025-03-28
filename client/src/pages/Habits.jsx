@@ -353,6 +353,52 @@ export default function Habits() {
               </select>
             </div>
 
+            {newHabit.frequency === 'weekly' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  روز هفته
+                </label>
+                <select
+                  className="input"
+                  value={newHabit.weekDay || '6'}
+                  onChange={(e) => setNewHabit({ ...newHabit, weekDay: e.target.value })}
+                >
+                  <option value="6">شنبه</option>
+                  <option value="0">یکشنبه</option>
+                  <option value="1">دوشنبه</option>
+                  <option value="2">سه‌شنبه</option>
+                  <option value="3">چهارشنبه</option>
+                  <option value="4">پنج‌شنبه</option>
+                  <option value="5">جمعه</option>
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  این عادت باید در این روز از هفته انجام شود
+                </p>
+              </div>
+            )}
+
+            {newHabit.frequency === 'monthly' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  روز ماه
+                </label>
+                <select
+                  className="input"
+                  value={newHabit.monthDay || '1'}
+                  onChange={(e) => setNewHabit({ ...newHabit, monthDay: e.target.value })}
+                >
+                  {Array.from({ length: 31 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {i + 1}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  این عادت باید در این روز از ماه انجام شود
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end">
               <button type="submit" className="button button-primary">
                 ایجاد عادت
@@ -416,8 +462,8 @@ export default function Habits() {
                     {habit.frequency === 'daily'
                       ? 'روزانه'
                       : habit.frequency === 'weekly'
-                      ? 'هفتگی'
-                      : 'ماهانه'}
+                      ? `هفتگی (${['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'][habit.weekDay]})`
+                      : `ماهانه (روز ${habit.monthDay})`}
                   </span>
                   <button
                     onClick={() => handleToggleComplete(habit.id, habit.today_status !== 1)}

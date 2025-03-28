@@ -19,7 +19,7 @@ export default function Register() {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      return setError('رمز عبور و تکرار آن باید یکسان باشند');
+      return setError('.رمز عبور و تکرار آن باید یکسان باشند');
     }
 
     try {

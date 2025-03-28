@@ -95,50 +95,65 @@ router.get('/', auth, async (req, res) => {
         dateFilter = "date('now', '-7 days')"; // default to week
     }
 
-    // Get daily completion data for chart
-    const dailyProgress = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT 
-          date(hp.progressDate) as date,
-          COUNT(DISTINCT h.id) as total_habits,
-          SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) as completed_habits
-         FROM habits h
-         LEFT JOIN habitProgress hp ON h.id = hp.habitId
-         WHERE h.user_id = ? AND hp.progressDate >= ${dateFilter}
-         GROUP BY date(hp.progressDate)
-         ORDER BY date(hp.progressDate) ASC`,
-        [req.user.id],
-        (err, rows) => {
-          if (err) reject(err);
-          resolve(rows);
-        }
-      );
-    });
-
     // Get individual habit progress
     const habits = await new Promise((resolve, reject) => {
       db.all(
-        `SELECT 
-          h.id as habit_id,
-          h.name as habit_name,
-          h.frequency,
+        `WITH habit_dates AS (
+          SELECT 
+            h.id as habit_id,
+            h.name as habit_name,
+            h.frequency,
+            h.created_at,
+            julianday('now') - julianday(h.created_at) as days_since_start,
+            CASE h.frequency
+              WHEN 'daily' THEN julianday('now') - julianday(h.created_at)
+              WHEN 'weekly' THEN (
+                SELECT COUNT(*) 
+                FROM (
+                  SELECT date(h.created_at, '+' || (n || ' days')) as week_date
+                  FROM (
+                    WITH RECURSIVE numbers(n) AS (
+                      SELECT 0
+                      UNION ALL
+                      SELECT n + 7 FROM numbers WHERE n < julianday('now') - julianday(h.created_at)
+                    )
+                    SELECT n FROM numbers
+                  )
+                )
+                WHERE week_date <= date('now')
+              )
+              WHEN 'monthly' THEN (
+                SELECT COUNT(*) 
+                FROM (
+                  SELECT date(h.created_at, '+' || (n || ' months')) as month_date
+                  FROM (
+                    WITH RECURSIVE numbers(n) AS (
+                      SELECT 0
+                      UNION ALL
+                      SELECT n + 1 FROM numbers WHERE n < (julianday('now') - julianday(h.created_at)) / 30
+                    )
+                    SELECT n FROM numbers
+                  )
+                )
+                WHERE month_date <= date('now')
+              )
+            END as expected_completions
+          FROM habits h
+          WHERE h.user_id = ?
+        )
+        SELECT 
+          hd.*,
           COUNT(DISTINCT hp.progressDate) as total_days,
           SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) as completed_days,
           ROUND(
             CAST(SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) AS FLOAT) / 
-            CAST(
-              CASE h.frequency
-                WHEN 'daily' THEN julianday('now') - julianday(h.created_at)
-                WHEN 'weekly' THEN (julianday('now') - julianday(h.created_at)) / 7
-                WHEN 'monthly' THEN (julianday('now') - julianday(h.created_at)) / 30
-              END
-            AS FLOAT) * 100, 
-          2) as completion_rate
-         FROM habits h
-         LEFT JOIN habitProgress hp ON h.id = hp.habitId 
-         WHERE h.user_id = ? AND hp.progressDate >= ${dateFilter}
-         GROUP BY h.id
-         ORDER BY completion_rate DESC`,
+            CAST(hd.expected_completions AS FLOAT) * 100, 
+            2) as completion_rate
+        FROM habit_dates hd
+        LEFT JOIN habitProgress hp ON hd.habit_id = hp.habitId 
+        WHERE hp.progressDate >= ${dateFilter}
+        GROUP BY hd.habit_id
+        ORDER BY completion_rate DESC`,
         [req.user.id],
         (err, rows) => {
           if (err) reject(err);
@@ -147,9 +162,90 @@ router.get('/', auth, async (req, res) => {
       );
     });
 
+    // Get daily completion data for chart
+    const dailyProgress = await new Promise((resolve, reject) => {
+      db.all(
+        `WITH RECURSIVE dates(date) AS (
+          SELECT date(${dateFilter})
+          UNION ALL
+          SELECT date(date, '+1 day')
+          FROM dates
+          WHERE date < date('now')
+        ),
+        weekly_dates AS (
+          SELECT 
+            date,
+            CASE 
+              WHEN strftime('%w', date) = '6' THEN date  -- Saturday
+              ELSE date(date, '+' || (6 - CAST(strftime('%w', date) AS INTEGER)) || ' days')
+            END as week_end_date
+          FROM dates
+        ),
+        weekly_habits AS (
+          SELECT 
+            h.id,
+            h.created_at,
+            date(h.created_at, '+' || (n || ' days')) as week_end_date
+          FROM habits h
+          CROSS JOIN (
+            WITH RECURSIVE numbers(n) AS (
+              SELECT 0
+              UNION ALL
+              SELECT n + 7 FROM numbers WHERE n < julianday('now') - julianday(h.created_at)
+            )
+            SELECT n FROM numbers
+          )
+          WHERE h.frequency = 'weekly'
+        ),
+        daily_expected AS (
+          SELECT 
+            d.date,
+            d.week_end_date,
+            COUNT(DISTINCT h.id) as total_habits,
+            SUM(CASE 
+              WHEN h.frequency = 'daily' THEN 1
+              WHEN h.frequency = 'weekly' AND EXISTS (
+                SELECT 1 FROM weekly_habits wh 
+                WHERE wh.id = h.id AND wh.week_end_date = d.week_end_date
+              ) THEN 1
+              WHEN h.frequency = 'monthly' AND strftime('%d', d.date) = strftime('%d', h.created_at) THEN 1
+              ELSE 0
+            END) as expected_habits
+          FROM weekly_dates d
+          CROSS JOIN habits h
+          WHERE h.user_id = ?
+          GROUP BY d.date
+        )
+        SELECT 
+          de.date,
+          de.total_habits,
+          de.expected_habits,
+          SUM(CASE WHEN hp.completed = 1 THEN 1 ELSE 0 END) as completed_habits
+        FROM daily_expected de
+        LEFT JOIN habitProgress hp ON date(hp.progressDate) = de.date
+        LEFT JOIN habits h ON hp.habitId = h.id
+        WHERE h.user_id = ?
+        GROUP BY de.date
+        ORDER BY de.date ASC`,
+        [req.user.id, req.user.id],
+        (err, rows) => {
+          if (err) reject(err);
+          resolve(rows);
+        }
+      );
+    });
+
+    // Process the data to calculate correct percentages
+    const processedDailyProgress = dailyProgress.map(day => ({
+      ...day,
+      completion_rate: day.expected_habits > 0 
+        ? Math.round((day.completed_habits / day.expected_habits) * 100)
+        : 0
+    }));
+
     res.json({
       habits,
-      daily: dailyProgress
+      daily: processedDailyProgress
     });
   } catch (err) {
     console.error('Get progress error:', err);

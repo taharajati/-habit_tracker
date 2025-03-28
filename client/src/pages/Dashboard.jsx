@@ -26,21 +26,30 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      const today = new Date().toISOString().split('T')[0];
       const [habitsResponse, moodsResponse] = await Promise.all([
-        habitService.getHabits(),
+        habitService.getHabits(today),
         moodService.getMoods('week')
       ]);
 
       const habits = habitsResponse.data;
       const moods = moodsResponse.data;
       
+      console.log('Today:', today);
+      console.log('Moods:', moods);
+      console.log('Today\'s Mood:', moods.find(mood => mood.date === today));
+      
       // Calculate streak count
       const streakCount = habits.reduce((max, habit) => 
         Math.max(max, habit.currentStreak || 0), 0);
 
+      // Find today's mood
+      const todayMood = moods.find(mood => mood.date === today);
+      console.log('Selected Today\'s Mood:', todayMood);
+
       setStats({
         habits: habits.slice(0, 5), // Show only 5 most recent habits
-        todayMood: moods[0], // Most recent mood
+        todayMood: todayMood || null, // Today's mood
         streakCount
       });
     } catch (err) {
@@ -79,24 +88,42 @@ export default function Dashboard() {
             امروز روز خوبی برای ساختن عادت‌های جدیده!
           </p>
         </div>
-        {stats.todayMood && (
+        {stats.todayMood ? (
           <div className="card p-4 flex items-center gap-3">
             <span className="text-2xl">
-              {stats.todayMood.level === 5 ? '🤩' :
-               stats.todayMood.level === 4 ? '😊' :
-               stats.todayMood.level === 3 ? '😐' :
-               stats.todayMood.level === 2 ? '😕' : '😢'}
+              {(() => {
+                const level = parseInt(stats.todayMood.level);
+                console.log('Mood Level:', level);
+                return level === 5 ? '🤩' :
+                       level === 4 ? '😊' :
+                       level === 3 ? '😐' :
+                       level === 2 ? '😕' :
+                       level === 1 ? '😢' : '😐';
+              })()}
             </span>
             <div>
               <div className="text-sm text-text-secondary">حال و احوال امروز</div>
               <div className="font-medium">
-                {stats.todayMood.level === 5 ? 'عالی' :
-                 stats.todayMood.level === 4 ? 'خوب' :
-                 stats.todayMood.level === 3 ? 'معمولی' :
-                 stats.todayMood.level === 2 ? 'بد' : 'خیلی بد'}
+                {(() => {
+                  const level = parseInt(stats.todayMood.level);
+                  console.log('Mood Level for Text:', level);
+                  return level === 5 ? 'عالی' :
+                         level === 4 ? 'خوب' :
+                         level === 3 ? 'معمولی' :
+                         level === 2 ? 'بد' :
+                         level === 1 ? 'خیلی بد' : 'معمولی';
+                })()}
               </div>
             </div>
           </div>
+        ) : (
+          <Link to="/mood" className="card p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+            <span className="text-2xl">😊</span>
+            <div>
+              <div className="text-sm text-text-secondary">حال و احوال امروز</div>
+              <div className="font-medium text-primary">ثبت حال و احوال</div>
+            </div>
+          </Link>
         )}
       </div>
 
@@ -136,6 +163,11 @@ export default function Dashboard() {
                   <div>
                     <h3 className="font-medium">{habit.name}</h3>
                     <p className="text-sm text-text-secondary">{habit.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {habit.frequency === 'daily' ? 'روزانه' :
+                       habit.frequency === 'weekly' ? `هفتگی (${['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'][habit.weekDay]})` :
+                       `ماهانه (روز ${habit.monthDay})`}
+                    </p>
                   </div>
                   <div className={`px-2 py-1 rounded text-sm ${
                     habit.today_status === 1

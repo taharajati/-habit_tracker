@@ -91,16 +91,24 @@ router.get('/', async (req, res) => {
 // Create a new habit
 router.post('/', async (req, res) => {
   try {
-    const { name, description, frequency } = req.body;
+    const { name, description, frequency, weekDay, monthDay } = req.body;
 
     if (!name || !frequency) {
       return res.status(400).json({ message: 'لطفاً نام و تناوب عادت را وارد کنید' });
     }
 
+    // Validate weekDay and monthDay based on frequency
+    if (frequency === 'weekly' && (weekDay === undefined || weekDay === null)) {
+      return res.status(400).json({ message: 'لطفاً روز هفته را انتخاب کنید' });
+    }
+    if (frequency === 'monthly' && (monthDay === undefined || monthDay === null)) {
+      return res.status(400).json({ message: 'لطفاً روز ماه را انتخاب کنید' });
+    }
+
     const result = await new Promise((resolve, reject) => {
       db.run(
-        'INSERT INTO habits (user_id, name, description, frequency) VALUES (?, ?, ?, ?)',
-        [req.user.id, name, description, frequency],
+        'INSERT INTO habits (user_id, name, description, frequency, weekDay, monthDay) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, name, description, frequency, weekDay || null, monthDay || null],
         function(err) {
           if (err) reject(err);
           resolve(this.lastID);
@@ -126,10 +134,18 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, frequency } = req.body;
+    const { name, description, frequency, weekDay, monthDay } = req.body;
 
     if (!name || !frequency) {
       return res.status(400).json({ message: 'لطفاً نام و تناوب عادت را وارد کنید' });
+    }
+
+    // Validate weekDay and monthDay based on frequency
+    if (frequency === 'weekly' && (weekDay === undefined || weekDay === null)) {
+      return res.status(400).json({ message: 'لطفاً روز هفته را انتخاب کنید' });
+    }
+    if (frequency === 'monthly' && (monthDay === undefined || monthDay === null)) {
+      return res.status(400).json({ message: 'لطفاً روز ماه را انتخاب کنید' });
     }
 
     // Check if habit exists and belongs to user
@@ -150,8 +166,8 @@ router.put('/:id', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(
-        'UPDATE habits SET name = ?, description = ?, frequency = ? WHERE id = ?',
-        [name, description, frequency, id],
+        'UPDATE habits SET name = ?, description = ?, frequency = ?, weekDay = ?, monthDay = ? WHERE id = ?',
+        [name, description, frequency, weekDay || null, monthDay || null, id],
         (err) => {
           if (err) reject(err);
           resolve();
@@ -244,39 +260,42 @@ router.patch('/:id/complete', async (req, res) => {
     }
 
     const targetDate = date || new Date().toISOString().split('T')[0];
-
-    // Check if the habit should be completed on this date based on frequency
     const today = new Date(targetDate);
     const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const dayOfMonth = today.getDate();
 
-    let shouldComplete = false;
+    // Check if the habit should be completed on this date based on frequency
+    let canComplete = true;
     switch (habit.frequency) {
       case 'daily':
-        shouldComplete = true;
+        canComplete = true;
         break;
       case 'weekly':
-        // For weekly habits, only allow completion on the same day of the week as the start date
-        const startDate = new Date(habit.startDate);
-        shouldComplete = startDate.getDay() === dayOfWeek;
+        canComplete = dayOfWeek === habit.weekDay;
         break;
       case 'monthly':
-        // For monthly habits, only allow completion on the same day of the month as the start date
-        const startDay = new Date(habit.startDate).getDate();
-        shouldComplete = startDay === dayOfMonth;
+        canComplete = dayOfMonth === habit.monthDay;
         break;
     }
 
-    if (!shouldComplete) {
+    if (!canComplete) {
       return res.status(400).json({ 
-        message: `این عادت ${habit.frequency === 'weekly' ? 'هفتگی' : 'ماهانه'} است و فقط در روزهای مشخص شده قابل انجام است.` 
+        message: `این عادت فقط در ${
+          habit.frequency === 'weekly' 
+            ? ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'][habit.weekDay]
+            : `روز ${habit.monthDay} هر ماه`
+        } قابل انجام است` 
       });
     }
 
+    // Insert or update progress
     await new Promise((resolve, reject) => {
       db.run(
-        'INSERT OR REPLACE INTO habitProgress (habitId, userId, completed, progressDate) VALUES (?, ?, ?, ?)',
-        [id, req.user.id, completed ? 1 : 0, targetDate],
+        `INSERT INTO habitProgress (userId, habitId, completed, progressDate)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(userId, habitId, progressDate) 
+         DO UPDATE SET completed = ?`,
+        [req.user.id, id, completed, targetDate, completed],
         (err) => {
           if (err) reject(err);
           resolve();
@@ -284,7 +303,37 @@ router.patch('/:id/complete', async (req, res) => {
       );
     });
 
-    res.json({ message: 'وضعیت عادت با موفقیت بروزرسانی شد' });
+    // Update streak
+    if (completed) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE habits 
+           SET currentStreak = currentStreak + 1,
+               totalCompletion = totalCompletion + 1
+           WHERE id = ? AND user_id = ?`,
+          [id, req.user.id],
+          (err) => {
+            if (err) reject(err);
+            resolve();
+          }
+        );
+      });
+    } else {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE habits 
+           SET currentStreak = 0
+           WHERE id = ? AND user_id = ?`,
+          [id, req.user.id],
+          (err) => {
+            if (err) reject(err);
+            resolve();
+          }
+        );
+      });
+    }
+
+    res.json({ message: 'وضعیت عادت بروزرسانی شد' });
   } catch (err) {
     console.error('Toggle habit completion error:', err);
     res.status(500).json({ message: 'خطا در بروزرسانی وضعیت عادت' });
