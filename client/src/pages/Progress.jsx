@@ -47,12 +47,12 @@ export default function Progress() {
     }
   };
 
-  const chartData = {
-    labels: progressData?.daily.map(d => d.date) || [],
+  const createChartData = (data, title) => ({
+    labels: data?.map(d => d.date) || [],
     datasets: [
       {
-        label: 'درصد تکمیل عادت‌ها',
-        data: progressData?.daily.map(d => (d.completed_habits / d.total_habits) * 100) || [],
+        label: title,
+        data: data?.map(d => d.completed_habits) || [],
         borderColor: 'rgb(79, 70, 229)',
         backgroundColor: 'rgba(79, 70, 229, 0.1)',
         tension: 0.4,
@@ -64,7 +64,7 @@ export default function Progress() {
         pointHoverRadius: 6
       }
     ]
-  };
+  });
 
   const chartOptions = {
     responsive: true,
@@ -80,7 +80,6 @@ export default function Progress() {
       },
       title: {
         display: true,
-        text: 'پیشرفت روزانه',
         font: {
           family: 'Vazirmatn',
           size: 16,
@@ -91,7 +90,6 @@ export default function Progress() {
     scales: {
       y: {
         beginAtZero: true,
-        max: 100,
         grid: {
           color: 'rgba(0, 0, 0, 0.05)'
         },
@@ -102,7 +100,7 @@ export default function Progress() {
         },
         title: {
           display: true,
-          text: 'درصد تکمیل',
+          text: 'تعداد عادت‌ها',
           font: {
             family: 'Vazirmatn',
             size: 14
@@ -124,25 +122,23 @@ export default function Progress() {
 
   return (
     <div className="p-6 space-y-8 fade-in">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold gradient-text">پیشرفت عادت‌ها</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setTimeRange('week')}
-            className={`button ${
-              timeRange === 'week' ? 'button-primary' : 'button-secondary'
-            }`}
-          >
-            هفتگی
-          </button>
-          <button
-            onClick={() => setTimeRange('month')}
-            className={`button ${
-              timeRange === 'month' ? 'button-primary' : 'button-secondary'
-            }`}
-          >
-            ماهانه
-          </button>
+      <div className="page-header">
+        <div className="page-header-content">
+          <h1 className="page-title">پیشرفت عادت‌ها</h1>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setTimeRange('week')}
+              className={`button ${timeRange === 'week' ? 'button-primary' : 'button-secondary'}`}
+            >
+              هفتگی
+            </button>
+            <button
+              onClick={() => setTimeRange('month')}
+              className={`button ${timeRange === 'month' ? 'button-primary' : 'button-secondary'}`}
+            >
+              ماهانه
+            </button>
+          </div>
         </div>
       </div>
 
@@ -151,41 +147,65 @@ export default function Progress() {
           <div className="loading-spinner"></div>
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg">
+        <div className="toast bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       ) : (
-        <>
+        <div className="space-y-8">
+          {/* Daily Habits Chart */}
           <div className="card p-6">
-            <Line data={chartData} options={chartOptions} />
+            <h2 className="text-xl font-bold mb-4">عادت‌های روزانه</h2>
+            <Line 
+              data={createChartData(progressData?.daily, 'تعداد عادت‌های انجام شده')}
+              options={{
+                ...chartOptions,
+                plugins: {
+                  ...chartOptions.plugins,
+                  title: {
+                    ...chartOptions.plugins.title,
+                    text: 'پیشرفت عادت‌های روزانه'
+                  }
+                }
+              }}
+            />
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {progressData?.habits.map((habit) => (
-              <div
-                key={habit.habit_id}
-                className="card p-6 space-y-4"
-              >
-                <h3 className="text-lg font-semibold text-gray-900">{habit.habit_name}</h3>
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>تکمیل شده: {habit.completed_days} روز</span>
-                  <span>کل روزها: {habit.total_days} روز</span>
-                </div>
-                <div className="space-y-2">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${habit.completion_rate}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-left text-sm font-medium text-primary">
-                    {habit.completion_rate}%
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Weekly Habits Chart */}
+          <div className="card p-6">
+            <h2 className="text-xl font-bold mb-4">عادت‌های هفتگی</h2>
+            <Line 
+              data={createChartData(progressData?.weekly, 'تعداد عادت‌های انجام شده')}
+              options={{
+                ...chartOptions,
+                plugins: {
+                  ...chartOptions.plugins,
+                  title: {
+                    ...chartOptions.plugins.title,
+                    text: 'پیشرفت عادت‌های هفتگی'
+                  }
+                }
+              }}
+            />
           </div>
-        </>
+
+          {/* Monthly Habits Chart */}
+          <div className="card p-6">
+            <h2 className="text-xl font-bold mb-4">عادت‌های ماهانه</h2>
+            <Line 
+              data={createChartData(progressData?.monthly, 'تعداد عادت‌های انجام شده')}
+              options={{
+                ...chartOptions,
+                plugins: {
+                  ...chartOptions.plugins,
+                  title: {
+                    ...chartOptions.plugins.title,
+                    text: 'پیشرفت عادت‌های ماهانه'
+                  }
+                }
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

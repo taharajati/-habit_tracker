@@ -224,26 +224,30 @@ export default function Habits() {
 
     // Calculate how many times this habit should have been completed
     let expectedCompletions = 0;
-    switch (habit.frequency) {
-      case 'daily':
-        // For daily habits, count all days from start date to today
-        const daysDiff = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-        expectedCompletions = daysDiff + 1;
-        break;
-      
-      case 'weekly': {
-        // For weekly habits, count how many weeks have passed
-        const weeksDiff = Math.floor((today - startDate) / (1000 * 60 * 60 * 24 * 7));
-        expectedCompletions = weeksDiff + 1;
-        break;
-      }
-      
-      case 'monthly': {
-        // For monthly habits, count how many months have passed
-        const monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12 + 
-                          (today.getMonth() - startDate.getMonth());
-        expectedCompletions = monthsDiff + 1;
-        break;
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= today) {
+      switch (habit.frequency) {
+        case 'daily':
+          expectedCompletions++;
+          currentDate.setDate(currentDate.getDate() + 1);
+          break;
+        
+        case 'weekly': {
+          if (currentDate.getDay() === parseInt(habit.weekDay)) {
+            expectedCompletions++;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+          break;
+        }
+        
+        case 'monthly': {
+          if (currentDate.getDate() === parseInt(habit.monthDay)) {
+            expectedCompletions++;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+          break;
+        }
       }
     }
 
@@ -256,25 +260,26 @@ export default function Habits() {
 
   return (
     <div className="p-6 space-y-8 fade-in">
-      <div className="flex justify-between items-center">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold gradient-text">عادت‌های روزانه</h1>
-          <div className="flex items-center space-x-4">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="input"
-            />
-            <span className="text-gray-600">{formatDate(selectedDate)}</span>
+      <div className="page-header">
+        <div className="page-header-content">
+          <div className="space-y-2">
+            <h1 className="page-title">عادت‌های روزانه</h1>
+            <div className="date-picker-container">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              />
+              <span>{formatDate(selectedDate)}</span>
+            </div>
           </div>
+          <button
+            onClick={() => setShowForm(true)}
+            className="button button-primary"
+          >
+            {showForm ? 'انصراف' : '➕ عادت جدید'}
+          </button>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="button button-primary"
-        >
-          {showForm ? 'انصراف' : '➕ عادت جدید'}
-        </button>
       </div>
 
       {/* Overall Progress Stats */}
@@ -304,7 +309,7 @@ export default function Habits() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg">
+        <div className="toast bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
@@ -427,85 +432,91 @@ export default function Habits() {
           {habits.map((habit) => {
             const progress = getHabitProgress(habit);
             return (
-              <div key={habit.id} className="card p-6 space-y-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {habit.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">{habit.description}</p>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(habit.id)}
-                    className="p-1.5 bg-white hover:bg-[var(--danger-light)] rounded-lg transition-all duration-200 group"
-                    title="حذف عادت"
+              <div key={habit.id} className="habit-card">
+                <button
+                  onClick={() => handleDelete(habit.id)}
+                  className="delete-button"
+                  title="حذف عادت"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="w-5 h-5 text-gray-400 group-hover:text-[var(--danger)] transition-colors duration-200"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                      />
-                    </svg>
-                  </button>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+                    />
+                  </svg>
+                </button>
+
+                <div className="habit-info">
+                  <div className="habit-info-icon">
+                    {habit.frequency === 'daily' ? '📅' : 
+                     habit.frequency === 'weekly' ? '📆' : '📊'}
+                  </div>
+                  <div className="habit-info-content">
+                    <h3>{habit.name}</h3>
+                    <p>{habit.description}</p>
+                  </div>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">
-                    {habit.frequency === 'daily'
-                      ? 'روزانه'
-                      : habit.frequency === 'weekly'
-                      ? `هفتگی (${['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'][habit.weekDay]})`
-                      : `ماهانه (روز ${habit.monthDay})`}
-                  </span>
+
+                <div className="habit-stats">
+                  <div className="stat-item">
+                    <span className="stat-value">{progress.percentage}%</span>
+                    <span className="stat-label">پیشرفت</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-value">{habit.currentStreak}</span>
+                    <span className="stat-label">روز متوالی</span>
+                  </div>
+                </div>
+
+                <div className="habit-progress">
+                  <div className="progress-bar">
+                    <div
+                      className="progress-bar-fill"
+                      style={{ width: `${progress.percentage}%` }}
+                    />
+                  </div>
+                  <div className="progress-info">
+                    <span>تکمیل شده: {progress.completed}</span>
+                    <span>کل: {progress.total}</span>
+                  </div>
+                </div>
+
+                <div className="habit-actions">
+                  <div className="habit-frequency">
+                    <span>
+                      {habit.frequency === 'daily'
+                        ? 'روزانه'
+                        : habit.frequency === 'weekly'
+                        ? `هفتگی (${['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه'][habit.weekDay]})`
+                        : `ماهانه (روز ${habit.monthDay})`}
+                    </span>
+                    {habit.currentStreak > 0 && (
+                      <span className="streak-badge">
+                        {habit.currentStreak} روز متوالی
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => handleToggleComplete(habit.id, habit.today_status !== 1)}
                     disabled={!canCompleteToday(habit)}
-                    className={`button ${
-                      habit.today_status === 1 ? 'button-primary' : 'button-secondary'
-                    } ${!canCompleteToday(habit) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`habit-toggle ${habit.today_status === 1 ? 'completed' : ''}`}
                   >
                     {habit.today_status === 1 ? '✅ انجام شد' : '⭕️ انجام نشده'}
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-gray-700">پیشرفت این عادت:</h4>
-                  <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${progress.percentage}%` }}
-                    ></div>
+                <div className="habit-calendar">
+                  <div className="calendar-header">
+                    <h3>تاریخچه 30 روز اخیر</h3>
                   </div>
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>تکمیل شده: {progress.completed}</span>
-                    <span>کل: {progress.total}</span>
-                    <span>{progress.percentage}%</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${habit.completionRate}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>رکورد فعلی: {habit.currentStreak} {habit.frequency === 'daily' ? 'روز' : habit.frequency === 'weekly' ? 'هفته' : 'ماه'}</span>
-                    <span>تکمیل: {habit.completionRate}%</span>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">تاریخچه 30 روز اخیر:</h4>
                   <div className="grid grid-cols-7 gap-1">
                     {Array.from({ length: 30 }, (_, i) => {
                       const date = new Date();
@@ -515,7 +526,7 @@ export default function Habits() {
                       return (
                         <div
                           key={dateStr}
-                          className={`aspect-square rounded-full flex items-center justify-center text-xs ${getProgressColor(dateStr, habit)}`}
+                          className={`calendar-day ${getProgressColor(dateStr, habit)}`}
                           title={formatDate(dateStr)}
                         >
                           {date.getDate()}

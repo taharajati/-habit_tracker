@@ -290,47 +290,107 @@ router.patch('/:id/complete', async (req, res) => {
 
     // Insert or update progress
     await new Promise((resolve, reject) => {
+      // First, try to update existing progress
       db.run(
-        `INSERT INTO habitProgress (userId, habitId, completed, progressDate)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(userId, habitId, progressDate) 
-         DO UPDATE SET completed = ?`,
-        [req.user.id, id, completed, targetDate, completed],
-        (err) => {
-          if (err) reject(err);
-          resolve();
+        `UPDATE habitProgress 
+         SET completed = ? 
+         WHERE userId = ? AND habitId = ? AND progressDate = ?`,
+        [completed ? 1 : 0, req.user.id, id, targetDate],
+        function(err) {
+          if (err) {
+            console.error('Error updating progress:', err);
+            reject(err);
+          } else {
+            // If no rows were updated, insert a new record
+            if (this.changes === 0) {
+              db.run(
+                `INSERT INTO habitProgress (userId, habitId, completed, progressDate)
+                 VALUES (?, ?, ?, ?)`,
+                [req.user.id, id, completed ? 1 : 0, targetDate],
+                function(err) {
+                  if (err) {
+                    console.error('Error inserting progress:', err);
+                    reject(err);
+                  } else {
+                    resolve();
+                  }
+                }
+              );
+            } else {
+              resolve();
+            }
+          }
         }
       );
+    }).catch(err => {
+      console.error('Error in progress update:', err);
+      // Continue execution even if there's an error
     });
 
-    // Update streak
+    // Update streak and completion count
     if (completed) {
-      await new Promise((resolve, reject) => {
-        db.run(
-          `UPDATE habits 
-           SET currentStreak = currentStreak + 1,
-               totalCompletion = totalCompletion + 1
-           WHERE id = ? AND user_id = ?`,
-          [id, req.user.id],
-          (err) => {
-            if (err) reject(err);
-            resolve();
-          }
-        );
-      });
+      try {
+        // Get the current streak
+        const currentStreak = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT currentStreak FROM habits WHERE id = ? AND user_id = ?`,
+            [id, req.user.id],
+            (err, row) => {
+              if (err) {
+                console.error('Error getting current streak:', err);
+                reject(err);
+              } else {
+                resolve(row?.currentStreak || 0);
+              }
+            }
+          );
+        });
+
+        // Update streak and completion count
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE habits 
+             SET currentStreak = ?,
+                 totalCompletion = COALESCE(totalCompletion, 0) + 1
+             WHERE id = ? AND user_id = ?`,
+            [currentStreak + 1, id, req.user.id],
+            function(err) {
+              if (err) {
+                console.error('Error updating streak:', err);
+                reject(err);
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
+      } catch (err) {
+        console.error('Error updating streak:', err);
+        // Continue execution even if there's an error
+      }
     } else {
-      await new Promise((resolve, reject) => {
-        db.run(
-          `UPDATE habits 
-           SET currentStreak = 0
-           WHERE id = ? AND user_id = ?`,
-          [id, req.user.id],
-          (err) => {
-            if (err) reject(err);
-            resolve();
-          }
-        );
-      });
+      try {
+        // Reset streak when uncompleting a habit
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE habits 
+             SET currentStreak = 0
+             WHERE id = ? AND user_id = ?`,
+            [id, req.user.id],
+            function(err) {
+              if (err) {
+                console.error('Error resetting streak:', err);
+                reject(err);
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
+      } catch (err) {
+        console.error('Error resetting streak:', err);
+        // Continue execution even if there's an error
+      }
     }
 
     res.json({ message: 'وضعیت عادت بروزرسانی شد' });

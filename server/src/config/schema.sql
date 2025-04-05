@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS habitProgress (
   streak INTEGER DEFAULT 0,
   streakBroken INTEGER DEFAULT 0,
   FOREIGN KEY (userId) REFERENCES users(id),
-  FOREIGN KEY (habitId) REFERENCES habits(id)
+  FOREIGN KEY (habitId) REFERENCES habits(id),
+  UNIQUE(userId, habitId, progressDate)
 );
 
 -- Mood table
