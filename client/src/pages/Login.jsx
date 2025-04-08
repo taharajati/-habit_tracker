@@ -90,7 +90,7 @@ export default function Login() {
         <div className="text-center text-sm">
           <span className="text-gray-600">حساب کاربری ندارید؟</span>{' '}
           <Link to="/register" className="text-primary hover:text-primary-light">
-            ثبت‌نام کنید
+            ثبت‌ نام کنید
           </Link>
         </div>
       </div>
